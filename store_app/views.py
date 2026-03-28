@@ -17,6 +17,7 @@ from store_app.forms import (
     CategoryForm,
     ProductDeleteForm,
 )
+from store_app.tasks import inform_product_creation
 from store_app.models import Product, Category
 
 
@@ -92,6 +93,32 @@ class ProductCreateView(ProductBaseView, CreateView):
         "products_list"
     )  # URL для перенаправления после успешного создания
 
+    def form_valid(self, form):
+        """
+        Обработчик успешной валидации формы.
+        Переопределяет стандартный метод CreateView.form_valid() для добавления
+        дополнительной логики после сохранения товара.
+
+        Args:
+            form (ProductForm): валидированная форма с данными товара.
+
+        Returns:
+            HttpResponse: HTTP‑ответ, обычно редирект на success_url.
+        """
+        response = super().form_valid(form)
+        # Вызывает родительский метод для выполнения стандартной логики:
+
+        product = form.save()
+
+        inform_product_creation.delay(product.id)
+        # Асинхронно запускает задачу Celery для информирования о создании товара.
+        # .delay() помещает задачу в очередь Celery — выполнение происходит в фоновом режиме.
+        # Передаёт ID товара как параметр для задачи.
+
+        return response
+        # Возвращает HTTP‑ответ пользователю (редирект на страницу списка товаров).
+        # Выполняется сразу после постановки задачи в очередь — пользователь не ждёт
+        # завершения асинхронной задачи.
 
 class ProductUpdateView(ProductBaseView, UpdateView):
     """
