@@ -40,16 +40,10 @@ redis:
 		docker run -d --name redis-server -p 6379:6379 redis; \
 	fi
 
-# Запуск Celery worker с проверкой установки Celery
+# Запуск Celery worker с прямым указанием пути к исполняемому файлу
 worker: uv-sync
-	@echo "Проверка доступности Celery..."; \
-	if ! . venv/bin/activate && command -v celery &> /dev/null; then \
-		echo "Celery не установлен. Выполняется повторная синхронизация зависимостей..."; \
-		make uv-sync; \
-	fi; \
-	echo "Запуск Celery worker..."; \
-	. venv/bin/activate && \
-	celery -A config worker --pool=solo
+	@echo "Запуск Celery worker..."; \
+	./venv/bin/celery -A config worker --pool=solo
 
 server:
 	@echo "Запуск Django development server..."; \
