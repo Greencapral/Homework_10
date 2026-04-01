@@ -41,9 +41,18 @@ redis:
 	fi
 
 
-# Запуск Celery worker через модуль Python (обход проблемы с shebang)
+# Запуск Celery worker с полной диагностикой
 worker: uv-sync
-	@echo "Запуск Celery worker через python -m..."; \
+	@echo "Запуск Celery worker..."; \
+	@echo "Проверка доступности Celery в окружении..."; \
+	if ! ./venv/bin/python -c "import celery; print(f'Celery {celery.__version__} доступен')" 2>/dev/null; then \
+		echo "Ошибка: Celery не найден в виртуальном окружении"; \
+		echo "Содержимое venv/lib:"; \
+		ls -la ./venv/lib/ || true; \
+		echo "Содержимое site-packages:"; \
+		find ./venv -name "*celery*" 2>/dev/null || true; \
+		exit 1; \
+	fi; \
 	./venv/bin/python -m celery -A config worker --pool=solo
 
 server:
