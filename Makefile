@@ -1,4 +1,4 @@
-.PHONY: setup redis run worker server clean
+.PHONY: setup redis run worker server clean install-uv
 
 setup: install-uv venv uv-sync
 
@@ -13,18 +13,23 @@ install-uv:
 		echo "Утилита uv уже установлена."; \
 	fi
 
+# Создание виртуального окружения с помощью uv
 venv:
 	@if [ ! -d "venv" ]; then \
 		echo "Создание виртуального окружения..."; \
-		uv venv venv; \
+		uv venv venv --python=/opt/hostedtoolcache/Python/3.14.3/x64/bin/python3; \
 	else \
 		echo "Виртуальное окружение уже существует"; \
 	fi
 
-# Синхронизация зависимостей через uv sync
+# Синхронизация зависимостей через uv sync с явным указанием окружения
 uv-sync: venv
-	@echo "Синхронизация зависимостей с помощью uv sync..."; \
-	uv sync --python venv/bin/python
+	@if [ ! -f "pyproject.toml" ] && [ ! -f "requirements.txt" ]; then \
+		echo "Ошибка: не найден pyproject.toml или requirements.txt"; \
+		exit 1; \
+	fi; \
+	echo "Синхронизация зависимостей с помощью uv sync..."; \
+	uv sync --python venv/bin/python --no-workspace
 
 # Запуск Redis-контейнера (с проверкой существования и состояния)
 redis:
@@ -40,35 +45,36 @@ redis:
 		docker run -d --name redis-server -p 6379:6379 redis; \
 	fi
 
-
-# Запуск Celery worker с полной диагностикой
+# Запуск Celery worker с диагностикой
 worker: uv-sync
 	@echo "Запуск Celery worker..."; \
 	@echo "Проверка доступности Celery в окружении..."; \
 	if ! ./venv/bin/python -c "import celery; print(f'Celery {celery.__version__} доступен')" 2>/dev/null; then \
 		echo "Ошибка: Celery не найден в виртуальном окружении"; \
-		echo "Содержимое venv/lib:"; \
-		ls -la ./venv/lib/ || true; \
-		echo "Содержимое site-packages:"; \
-		find ./venv -name "*celery*" 2>/dev/null || true; \
+		echo "Содержимое venv/lib/python3.14/site-packages/:"; \
+		ls -la ./venv/lib/python3.14/site-packages/ | grep -i celery || true; \
+		echo "Полный список установленных пакетов:"; \
+		./venv/bin/pip list; \
 		exit 1; \
 	fi; \
 	./venv/bin/python -m celery -A config worker --pool=solo
 
-server:
+# Запуск Django development server
+server: uv-sync
 	@echo "Запуск Django development server..."; \
-	. venv/bin/activate && \
-	python manage.py runserver & \
-	echo $$! > server.pid
+	./venv/bin/python manage.py runserver
 
+# Комбинированная цель для запуска всего стека
+run: uv-sync redis
+	@echo "Полный стек запущен: зависимости установлены, Redis работает."
+	@echo "Запустите make worker и make server в отдельных терминалах."
+
+# Очистка: остановка и удаление Redis-контейнера, удаление виртуального окружения
 clean:
 	@echo "Очистка окружения..."; \
-	# Останавливаем процессы по PID
-	if [ -f "celery.pid" ]; then kill $$(cat celery.pid) 2>/dev/null || true; rm -f celery.pid; fi; \
-	if [ -f "server.pid" ]; then kill $$(cat server.pid) 2>/dev/null || true; rm -f server.pid; fi; \
-	# Останавливаем Redis
 	docker stop redis-server 2>/dev/null || true; \
-#	docker rm redis-server 2>/dev/null || true; \
-	# Удаляем виртуальное окружение и PID‑файлы
-	rm -rf venv; \
+	docker rm redis-server 2>/dev/null || true; \
+	pkill -f "python manage.py runserver" 2>/dev/null || true; \
+	pkill -f "celery -A config worker" 2>/dev/null || true; \
+	rm -rf venv .venv; \
 	echo "Очистка завершена."
