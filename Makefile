@@ -22,14 +22,14 @@ venv:
 		echo "Виртуальное окружение уже существует"; \
 	fi
 
-# Синхронизация зависимостей через uv sync без лишних флагов
+# Синхронизация зависимостей через uv sync с явным указанием окружения и без создания .venv
 uv-sync: venv
 	@if [ ! -f "pyproject.toml" ] && [ ! -f "requirements.txt" ]; then \
 		echo "Ошибка: не найден pyproject.toml или requirements.txt"; \
 		exit 1; \
 	fi; \
 	echo "Синхронизация зависимостей с помощью uv sync..."; \
-	uv sync --python venv/bin/python
+	uv sync --python venv/bin/python --no-install-workspace
 
 # Запуск Redis-контейнера (с проверкой существования и состояния)
 redis:
@@ -37,41 +37,45 @@ redis:
 		if docker inspect -f '{{.State.Running}}' redis-server 2>/dev/null | grep -q "true"; then \
 			echo "Контейнер redis-server уже запущен"; \
 	else \
-			echo "Контейнер redis-server остановлен, выполняется запуск..."; \
-			docker start redis-server; \
+		echo "Контейнер redis-server остановлен, выполняется запуск..."; \
+		docker start redis-server; \
 	fi; \
 	else \
 		echo "Контейнер redis-server не найден, выполняется создание..."; \
 		docker run -d --name redis-server -p 6379:6379 redis; \
 	fi
 
-# Запуск Celery worker с диагностикой
+# Запуск Celery worker с диагностикой и без использования @echo в shell-командах
 worker: uv-sync
-	@echo "Запуск Celery worker..."; \
-	@echo "Проверка доступности Celery в окружении..."; \
+	echo "Запуск Celery worker..."; \
+	echo "Проверка доступности Celery в окружении..."; \
 	if ! ./venv/bin/python -c "import celery; print(f'Celery {celery.__version__} доступен')" 2>/dev/null; then \
 		echo "Ошибка: Celery не найден в виртуальном окружении"; \
 		echo "Содержимое venv/lib/python3.14/site-packages/:"; \
-		ls -la ./venv/lib/python3.14/site-packages/ | grep -i celery || true; \
+		ls -la ./venv/lib/python3.14/site-packages/ 2>/dev/null || echo "Папка site-packages не найдена"; \
 		echo "Полный список установленных пакетов:"; \
-		./venv/bin/pip list; \
+		if [ -f "./venv/bin/pip" ]; then \
+			./venv/bin/pip list 2>/dev/null || echo "pip не может вывести список пакетов"; \
+	else \
+			echo "pip не найден в виртуальном окружении"; \
+	fi; \
 		exit 1; \
 	fi; \
 	./venv/bin/python -m celery -A config worker --pool=solo
 
 # Запуск Django development server
 server: uv-sync
-	@echo "Запуск Django development server..."; \
+	echo "Запуск Django development server..."; \
 	./venv/bin/python manage.py runserver
 
 # Комбинированная цель для запуска всего стека
 run: uv-sync redis
-	@echo "Полный стек запущен: зависимости установлены, Redis работает."
-	@echo "Запустите make worker и make server в отдельных терминалах."
+	echo "Полный стек запущен: зависимости установлены, Redis работает."
+	echo "Запустите make worker и make server в отдельных терминалах."
 
 # Очистка: остановка и удаление Redis-контейнера, удаление виртуального окружения
 clean:
-	@echo "Очистка окружения..."; \
+	echo "Очистка окружения..."; \
 	docker stop redis-server 2>/dev/null || true; \
 	docker rm redis-server 2>/dev/null || true; \
 	pkill -f "python manage.py runserver" 2>/dev/null || true; \
