@@ -1,9 +1,18 @@
 .PHONY: setup redis run worker server clean
 
-# Цель для полной настройки проекта: создание виртуального окружения и установка зависимостей
-setup: venv uv-sync
+setup: install-uv venv uv-sync
 
-# Создание виртуального окружения с помощью uv
+# Установка uv, если не найден
+install-uv:
+	@if ! command -v uv &> /dev/null; then \
+		echo "Утилита uv не найдена, выполняется установка..."; \
+		curl -LsSf https://astral.sh/uv/install.sh | sh; \
+		export PATH="$HOME/.local/bin:$${PATH}"; \
+		echo "uv установлен успешно."; \
+	else \
+		echo "Утилита uv уже установлена."; \
+	fi
+
 venv:
 	@if [ ! -d "venv" ]; then \
 		echo "Создание виртуального окружения..."; \
