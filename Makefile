@@ -40,10 +40,11 @@ redis:
 		docker run -d --name redis-server -p 6379:6379 redis; \
 	fi
 
-# Запуск Celery worker с прямым указанием пути к исполняемому файлу
+
+# Запуск Celery worker через модуль Python (обход проблемы с shebang)
 worker: uv-sync
-	@echo "Запуск Celery worker..."; \
-	./venv/bin/celery -A config worker --pool=solo
+	@echo "Запуск Celery worker через python -m..."; \
+	./venv/bin/python -m celery -A config worker --pool=solo
 
 server:
 	@echo "Запуск Django development server..."; \
