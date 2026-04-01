@@ -13,7 +13,7 @@ install-uv:
 		echo "Утилита uv уже установлена."; \
 	fi
 
-# Создание виртуального окружения с помощью uv — без создания .venv
+# Создание виртуального окружения с помощью uv
 venv:
 	@if [ ! -d "venv" ]; then \
 		echo "Создание виртуального окружения..."; \
@@ -22,7 +22,7 @@ venv:
 		echo "Виртуальное окружение уже существует"; \
 	fi
 
-# Синхронизация зависимостей с явным указанием окружения и без workspace
+# Синхронизация зависимостей через uv sync
 uv-sync: venv
 	@if [ ! -f "pyproject.toml" ] && [ ! -f "requirements.txt" ]; then \
 		echo "Ошибка: не найден pyproject.toml или requirements.txt"; \
@@ -45,15 +45,14 @@ redis:
 		docker run -d --name redis-server -p 6379:6379 redis; \
 	fi
 
-# Запуск Celery worker с улучшенной диагностикой
+# Запуск Celery worker с корректным синтаксисом shell-команд
 worker: uv-sync
 	echo "Запуск Celery worker..."; \
 	echo "Проверка доступности Celery в окружении..."; \
-	if ! ./venv/bin/python -c "import celery; print(f'Celery {celery.__version__} доступен')" 2>/dev/null; then \
+	./venv/bin/python -c "import celery; print(f'Celery {celery.__version__} доступен')" 2>/dev/null || { \
 		echo "Ошибка: Celery не найден в виртуальном окружении"; \
-		# Диагностика окружения
 		echo "=== ДИАГНОСТИКА ОКРУЖЕНИЯ ==="; \
-		echo "Путь к Python: $(./venv/bin/python --version 2>&1)"; \
+		echo "Путь к Python: $$(./venv/bin/python --version 2>&1)"; \
 		echo "sys.path:"; \
 		./venv/bin/python -c "import sys; print('\n'.join(sys.path))" 2>/dev/null || echo "Не удалось получить sys.path"; \
 		echo "Содержимое venv/lib/python3.14/site-packages/:"; \
@@ -62,7 +61,7 @@ worker: uv-sync
 		echo "Поиск файлов celery:"; \
 		find ./venv -name "*celery*" 2>/dev/null || echo "Файлы celery не найдены"; \
 		exit 1; \
-	fi; \
+	}; \
 	./venv/bin/python -m celery -A config worker --pool=solo
 
 # Запуск Django development server
