@@ -22,14 +22,14 @@ venv:
 		echo "Виртуальное окружение уже существует"; \
 	fi
 
-# Синхронизация зависимостей через uv sync с явным указанием окружения
+# Синхронизация зависимостей через uv sync без лишних флагов
 uv-sync: venv
 	@if [ ! -f "pyproject.toml" ] && [ ! -f "requirements.txt" ]; then \
 		echo "Ошибка: не найден pyproject.toml или requirements.txt"; \
 		exit 1; \
 	fi; \
 	echo "Синхронизация зависимостей с помощью uv sync..."; \
-	uv sync --python venv/bin/python --no-workspace
+	uv sync --python venv/bin/python
 
 # Запуск Redis-контейнера (с проверкой существования и состояния)
 redis:
